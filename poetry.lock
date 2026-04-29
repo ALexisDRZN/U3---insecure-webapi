@@ -1,0 +1,30 @@
+[[package]]
+name = "bottle"
+version = "0.13.4"
+description = "Fast and simple WSGI-framework for small web-applications."
+category = "main"
+optional = false
+python-versions = "*"
+
+[[package]]
+name = "mysql-connector-python"
+version = "9.7.0"
+description = "A self-contained Python driver for communicating with MySQL servers, using an API that is compliant with the Python Database API Specification v2.0 (PEP 249)."
+category = "main"
+optional = false
+python-versions = ">=3.10"
+
+[package.extras]
+dns-srv = ["dnspython (==2.6.1)"]
+gssapi = ["gssapi (==1.8.3)"]
+telemetry = ["opentelemetry-api (==1.33.1)", "opentelemetry-sdk (==1.33.1)", "opentelemetry-exporter-otlp-proto-http (==1.33.1)"]
+webauthn = ["fido2 (==1.1.2)"]
+
+[metadata]
+lock-version = "1.1"
+python-versions = "^3.10"
+content-hash = "e79a62ed025017fcd3218046fb8d5a66a2502987b2b72d512b8428b24a8b6f2b"
+
+[metadata.files]
+bottle = []
+mysql-connector-python = []
