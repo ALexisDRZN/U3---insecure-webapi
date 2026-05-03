@@ -4,9 +4,11 @@ import hashlib
 import mysql.connector
 import base64
 import shutil
+import ssl
+from wsgiref.simple_server import make_server
 from datetime import datetime
 from pathlib import Path
-from bottle import route, run, template, post, request, static_file, BaseRequest
+from bottle import route, run, template, post, request, static_file, BaseRequest, default_app
 
 BaseRequest.MEMFILE_MAX = 5 * 1024 * 1024
 
@@ -297,4 +299,15 @@ def Descargar():
 	return static_file(R[0][1],Path(".").resolve())
 
 if __name__ == '__main__':
-    run(host='localhost', port=8080, debug=True)
+    # Creamos el contexto de seguridad SSL
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ctx.load_cert_chain('cert.pem', 'key.pem')
+
+    # Levantamos el servidor nativo de Python y le inyectamos la seguridad
+    app = default_app()
+    server = make_server('localhost', 8080, app)
+    server.socket = ctx.wrap_socket(server.socket, server_side=True)
+
+
+    print(" Servidor HTTPS seguro corriendo en https://localhost:8080/")
+    server.serve_forever()
