@@ -6,7 +6,9 @@ import base64
 import shutil
 from datetime import datetime
 from pathlib import Path
-from bottle import route, run, template, post, request, static_file
+from bottle import route, run, template, post, request, static_file, BaseRequest
+
+BaseRequest.MEMFILE_MAX = 5 * 1024 * 1024
 
 
 
