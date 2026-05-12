@@ -12,6 +12,17 @@ from bottle import route, run, template, post, request, static_file, BaseRequest
 
 BaseRequest.MEMFILE_MAX = 5 * 1024 * 1024
 
+def validar_ruta_imagen(ruta_bd):
+	directorio_img = Path("img").resolve()
+	ruta_resuelta  = (Path(".") / ruta_bd).resolve()
+ 
+	# str.startswith() compara la ruta absoluta resuelta contra el
+	# directorio permitido. Si no empieza con él, está fuera.
+	if not str(ruta_resuelta).startswith(str(directorio_img)):
+		return None  # ruta inválida o maliciosa
+ 
+	return ruta_resuelta
+
 
 
 def loadDatabaseSettings(pathjs):
@@ -75,9 +86,15 @@ def Registro():
 	# TODO validar correo en json
 	# TODO Control de error de la DB
 	R = False
+	uname    = request.json["uname"]
+	email    = request.json["email"]
+	password = request.json["password"]
 	try:
 		with db.cursor() as cursor:
-			cursor.execute(f'insert into Usuario values(null,"{request.json["uname"]}","{request.json["email"]}",md5("{request.json["password"]}"))');
+			cursor.execute(
+                'INSERT INTO Usuario VALUES (NULL, %s, %s, MD5(%s))',
+                (uname, email, password)
+            )
 			R = cursor.lastrowid
 			db.commit()
 		db.close()
@@ -122,11 +139,15 @@ def Login():
 	
 	# TODO validar correo en json
 	# TODO Control de error de la DB
+	uname    = request.json["uname"]
+	password = request.json["password"]
 	R = False
 	try:
 		with db.cursor() as cursor:
-			print(f'Select id from  Usuario where uname ="{request.json["uname"]}" and password = md5("{request.json["password"]}")')
-			cursor.execute(f'Select id from  Usuario where uname ="{request.json["uname"]}" and password = md5("{request.json["password"]}")');
+			cursor.execute(
+                'SELECT id FROM Usuario WHERE uname = %s AND password = MD5(%s)',
+                (uname, password)
+            )			
 			R = cursor.fetchall()
 	except Exception as e: 
 		print(e)
@@ -147,8 +168,14 @@ def Login():
 	
 	try:
 		with db.cursor() as cursor:
-			cursor.execute(f'Delete from AccesoToken where id_Usuario = "{R[0][0]}"');
-			cursor.execute(f'insert into AccesoToken values({R[0][0]},"{T}",now())');
+			cursor.execute(
+                'DELETE FROM AccesoToken WHERE id_Usuario = %s',
+                (R[0][0],)
+            )
+			cursor.execute(
+                'INSERT INTO AccesoToken VALUES (%s, %s, NOW())',
+                (R[0][0], T)
+            )
 			db.commit()
 			db.close()
 			return {"R":0,"D":T}
@@ -204,7 +231,10 @@ def Imagen():
 	R = False
 	try:
 		with db.cursor() as cursor:
-			cursor.execute(f'select id_Usuario from AccesoToken where token = "{TKN}"');
+			cursor.execute(
+                'SELECT id_Usuario FROM AccesoToken WHERE token = %s',
+                (TKN,)
+            )			
 			R = cursor.fetchall()
 	except Exception as e: 
 		print(e)
@@ -213,6 +243,8 @@ def Imagen():
 	
 	
 	id_Usuario = R[0][0];
+	name = request.json['name']
+	ext  = request.json['ext']
 	with open(f'tmp/{id_Usuario}',"wb") as imagen:
 		imagen.write(base64.b64decode(request.json['data'].encode()))
 	
@@ -221,11 +253,26 @@ def Imagen():
 	# Guardar info del archivo en la base de datos
 	try:
 		with db.cursor() as cursor:
-			cursor.execute(f'insert into Imagen values(null,"{request.json["name"]}","img/",{id_Usuario})');
-			cursor.execute('select max(id) as idImagen from Imagen where id_Usuario = '+str(id_Usuario));
+			cursor.execute(
+                'INSERT INTO Imagen VALUES (NULL, %s, %s, %s)',
+                (name, 'img/', id_Usuario)
+            )
+            # FIX SQL INJECTION: id_Usuario parametrizado en el SELECT
+			cursor.execute(
+                'SELECT MAX(id) AS idImagen FROM Imagen WHERE id_Usuario = %s',
+                (id_Usuario,)
+            )
+
 			R = cursor.fetchall()
-			idImagen = R[0][0];
-			cursor.execute('update Imagen set ruta = "img/'+str(idImagen)+'.'+str(request.json['ext'])+'" where id = '+str(idImagen));
+			idImagen = R[0][0]
+			nueva_ruta = f'img/{idImagen}.{ext}'
+ 
+            # FIX SQL INJECTION: ruta e id parametrizados en el UPDATE
+			cursor.execute(
+                'UPDATE Imagen SET ruta = %s WHERE id = %s',
+                (nueva_ruta, idImagen)
+            )
+
 			db.commit()
 			# Mover archivo a su nueva locacion
 			shutil.move('tmp/'+str(id_Usuario),'img/'+str(idImagen)+'.'+str(request.json['ext']))
@@ -276,7 +323,10 @@ def Descargar():
 	R = False
 	try:
 		with db.cursor() as cursor:
-			cursor.execute('select id_Usuario from AccesoToken where token = "'+TKN+'"');
+			cursor.execute(
+                'SELECT id_Usuario FROM AccesoToken WHERE token = %s',
+                (TKN,)
+            )			
 			R = cursor.fetchall()
 	except Exception as e: 
 		print(e)
@@ -289,15 +339,36 @@ def Descargar():
 	
 	try:
 		with db.cursor() as cursor:
-			cursor.execute('Select name,ruta from  Imagen where id = '+str(idImagen));
+			cursor.execute(
+                'SELECT name, ruta FROM Imagen WHERE id = %s AND id_Usuario = %s',
+                (idImagen, id_Usuario)
+            )			
 			R = cursor.fetchall()
 	except Exception as e: 
 		print(e)
 		db.close()
 		return {"R":-3}
-	print(Path("img").resolve(),R[0][1])
-	return static_file(R[0][1],Path(".").resolve())
+	
+	if not R:
+		db.close()
+		return {"R": -5}  # Imagen no encontrada o no pertenece al usuario
+ 
+	ruta_bd = R[0][1]
 
+	ruta_valida = validar_ruta_imagen(ruta_bd)
+ 
+	if ruta_valida is None:
+		db.close()
+		return {"R": -6}  # Ruta fuera del directorio permitido — ataque bloqueado
+ 
+	# Servir usando nombre de archivo + directorio img/ por separado
+	# para que Bottle no pueda navegar fuera de ese directorio
+	directorio_img = Path("img").resolve()
+	nombre_archivo = ruta_valida.name
+ 
+	return static_file(nombre_archivo, root=str(directorio_img))
+
+	
 if __name__ == '__main__':
     # Creamos el contexto de seguridad SSL
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
