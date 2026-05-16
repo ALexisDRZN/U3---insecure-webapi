@@ -16,8 +16,6 @@ def validar_ruta_imagen(ruta_bd):
 	directorio_img = Path("img").resolve()
 	ruta_resuelta  = (Path(".") / ruta_bd).resolve()
  
-	# str.startswith() compara la ruta absoluta resuelta contra el
-	# directorio permitido. Si no empieza con él, está fuera.
 	if not str(ruta_resuelta).startswith(str(directorio_img)):
 		return None  # ruta inválida o maliciosa
  
@@ -240,9 +238,12 @@ def Imagen():
 		print(e)
 		db.close()
 		return {"R":-2}
+		
+	if not R:
+		db.close()
+		return {"R": -3}
 	
-	
-	id_Usuario = R[0][0];
+	id_Usuario = R[0][0]
 	name = request.json['name']
 	ext  = request.json['ext']
 	with open(f'tmp/{id_Usuario}',"wb") as imagen:
@@ -334,6 +335,12 @@ def Descargar():
 		return {"R":-2}
 		
 	
+	# FIX vuln #3: token no existe → corte inmediato
+	if not R:
+		db.close()
+		return {"R": -3}
+
+	id_Usuario = R[0][0]    # ← definido aquí, disponible para la query de abajo
 	
 	# Buscar imagen y enviarla
 	
@@ -368,7 +375,7 @@ def Descargar():
  
 	return static_file(nombre_archivo, root=str(directorio_img))
 
-	
+
 if __name__ == '__main__':
     # Creamos el contexto de seguridad SSL
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
