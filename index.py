@@ -67,6 +67,52 @@ def getToken():
 	Q = m.hexdigest()
 	return f"{P[:20]}{Q[20:]}"
 
+def validar_token(db, TKN):
+    try:
+        with db.cursor() as cursor:
+            # FIX vuln #5: AND expires_at > NOW() — token expirado = inválido
+            cursor.execute(
+                'SELECT id_Usuario FROM AccesoToken WHERE token = %s AND expires_at > NOW()',
+                (TKN,)
+            )
+            R = cursor.fetchall()
+        if not R:
+            return None
+        return R[0][0]
+    except Exception as e:
+        print(e)
+        return None
+		
+# ANTES — no existía logout, el cliente solo borraba el token localmente
+# y el token seguía vivo en la BD para siempre
+
+# DESPUÉS — borra el token de la BD inmediatamente
+@post('/Logout')
+def Logout():
+    if not request.json or 'token' not in request.json:
+        return {"R": -1}
+
+    db = get_db_connection()
+    id_Usuario = validar_token(db, request.json['token'])
+    if id_Usuario is None:
+        db.close()
+        return {"R": -2}  # Token inválido
+
+    try:
+        with db.cursor() as cursor:
+            cursor.execute(
+                'DELETE FROM AccesoToken WHERE token = %s',
+                (request.json['token'],)
+            )
+            db.commit()
+        db.close()
+        return {"R": 0}  # Sesión cerrada — token eliminado de la BD
+    except Exception as e:
+        print(e)
+        db.close()
+        return {"R": -3}
+
+
 """
 */ 
 # Registro
@@ -188,9 +234,9 @@ def Login():
                 (R[0][0],)
             )
 			cursor.execute(
-                'INSERT INTO AccesoToken VALUES (%s, %s, NOW())',
+                'INSERT INTO AccesoToken VALUES (%s, %s, NOW(), NOW() + INTERVAL 1 DAY)',
                 (R[0][0], T)
-            )
+			)
 			db.commit()
 			db.close()
 			return {"R":0,"D":T}
@@ -242,7 +288,7 @@ def Imagen():
 	)'''
 
 	# Validar si el usuario esta en la base de datos
-	TKN = request.json['token'];
+	'''TKN = request.json['token'];
 	
 	R = False
 	try:
@@ -261,7 +307,14 @@ def Imagen():
 		db.close()
 		return {"R": -3}
 	
-	id_Usuario = R[0][0]
+	id_Usuario = R[0][0]'''
+
+	# Obtener el id_Usuario desde el token (con expiración)
+	id_Usuario = validar_token(db, request.json['token'])
+	if id_Usuario is None:
+		db.close()
+		return {"R": -2}
+
 	name = request.json['name']
 	ext  = request.json['ext']
 	with open(f'tmp/{id_Usuario}',"wb") as imagen:
@@ -340,7 +393,7 @@ def Descargar():
 	TKN = request.json['token'];
 	idImagen = request.json['id'];
 	
-	R = False
+	'''R = False
 	try:
 		with db.cursor() as cursor:
 			cursor.execute(
@@ -360,6 +413,11 @@ def Descargar():
 		return {"R": -3}
 
 	id_Usuario = R[0][0]    # ← definido aquí, disponible para la query de abajo
+'''
+	id_Usuario = validar_token(db, TKN)  # #3 y #5 dentro de la función
+	if id_Usuario is None:
+		db.close()
+		return {"R": -2}
 
 	# Buscar imagen y enviarla
 	
