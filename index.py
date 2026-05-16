@@ -5,6 +5,7 @@ import mysql.connector
 import base64
 import shutil
 import ssl
+import os
 from wsgiref.simple_server import make_server
 from datetime import datetime
 from pathlib import Path
@@ -23,14 +24,28 @@ def validar_ruta_imagen(ruta_bd):
 
 
 
-def loadDatabaseSettings(pathjs):
+'''def loadDatabaseSettings(pathjs):
 	pathjs = Path(pathjs)
 	sjson = False
 	if pathjs.exists():
 		with pathjs.open() as data:
 			sjson = json.load(data)
-	return sjson
+	return sjson'''
 	
+def get_db_connection():
+    required = ['DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD']
+    missing  = [v for v in required if not os.environ.get(v)]
+    if missing:
+        raise EnvironmentError(f"Variables de entorno faltantes: {missing}")
+
+    return mysql.connector.connect(
+        host     = os.environ.get('DB_HOST', 'localhost'),
+        port     = int(os.environ['DB_PORT']),
+        database = os.environ['DB_NAME'],
+        user     = os.environ['DB_USER'],
+        password = os.environ['DB_PASSWORD']
+    )
+
 """
 function loadDatabaseSettings(pathjs):
 	string = file_get_contents(pathjs);
@@ -67,13 +82,14 @@ def getToken():
 """
 @post('/Registro')
 def Registro():
-	dbcnf = loadDatabaseSettings('db.json');
-	db = mysql.connector.connect(
+	#dbcnf = loadDatabaseSettings('db.json');
+	db = get_db_connection()
+	'''db = mysql.connector.connect(
 		host='localhost', port = dbcnf['port'],
 		database = dbcnf['dbname'],
 		user = dbcnf['user'],
 		password = dbcnf['password']
-	)
+	)'''
 	####/ obtener el cuerpo de la peticion
 	if not request.json:
 		return {"R":-1}
@@ -119,13 +135,14 @@ def Registro():
 
 @post('/Login')
 def Login():
-	dbcnf = loadDatabaseSettings('db.json');
+	db = get_db_connection()
+	'''dbcnf = loadDatabaseSettings('db.json');
 	db = mysql.connector.connect(
 		host='localhost', port = dbcnf['port'],
 		database = dbcnf['dbname'],
 		user = dbcnf['user'],
 		password = dbcnf['password']
-	)
+	)'''
 	###/ obtener el cuerpo de la peticion
 	if not request.json:
 		return {"R":-1}
@@ -215,13 +232,14 @@ def Imagen():
 	if not R:
 		return {"R":-1}
 	
-	dbcnf = loadDatabaseSettings('db.json');
+	db = get_db_connection()
+	'''dbcnf = loadDatabaseSettings('db.json');
 	db = mysql.connector.connect(
 		host='localhost', port = dbcnf['port'],
 		database = dbcnf['dbname'],
 		user = dbcnf['user'],
 		password = dbcnf['password']
-	)
+	)'''
 
 	# Validar si el usuario esta en la base de datos
 	TKN = request.json['token'];
@@ -298,13 +316,14 @@ def Imagen():
 
 @post('/Descargar')
 def Descargar():
-	dbcnf = loadDatabaseSettings('db.json');
+	db = get_db_connection()
+	'''dbcnf = loadDatabaseSettings('db.json');
 	db = mysql.connector.connect(
 		host='localhost', port = dbcnf['port'],
 		database = dbcnf['dbname'],
 		user = dbcnf['user'],
 		password = dbcnf['password']
-	)
+	)'''
 	
 	
 	###/ obtener el cuerpo de la peticion
@@ -341,7 +360,7 @@ def Descargar():
 		return {"R": -3}
 
 	id_Usuario = R[0][0]    # ← definido aquí, disponible para la query de abajo
-	
+
 	# Buscar imagen y enviarla
 	
 	try:
